@@ -4,6 +4,10 @@ use std::{
 };
 
 use pixels::{Pixels, SurfaceTexture};
+use rodio::{
+    DeviceSinkBuilder, MixerDeviceSink, Player,
+    source::{SineWave, Source},
+};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -501,6 +505,8 @@ struct App {
     pixels: Option<Pixels<'static>>,
     chip8: Chip8,
     last_tick: Instant,
+    _audio: MixerDeviceSink,
+    beep: Player,
 }
 
 impl ApplicationHandler for App {
@@ -595,6 +601,12 @@ impl ApplicationHandler for App {
         self.chip8.timer.dt = self.chip8.timer.dt.saturating_sub(1);
         self.chip8.timer.st = self.chip8.timer.st.saturating_sub(1);
 
+        if self.chip8.timer.st > 0 {
+            self.beep.play();
+        } else {
+            self.beep.pause();
+        }
+
         if let Some(window) = &self.window {
             window.request_redraw();
         }
@@ -610,12 +622,20 @@ fn main() {
     let mut chip8 = Chip8::default();
     chip8.load_program(&program);
 
+    let mut audio = DeviceSinkBuilder::open_default_sink().expect("open default audio stream");
+    audio.log_on_drop(false);
+    let beep = Player::connect_new(audio.mixer());
+    beep.append(SineWave::new(1000.0).amplify(0.2).repeat_infinite());
+    beep.pause();
+
     let event_loop = EventLoop::new().unwrap();
     let mut app = App {
         window: None,
         pixels: None,
         chip8,
         last_tick: Instant::now(),
+        _audio: audio,
+        beep,
     };
     event_loop.run_app(&mut app).unwrap();
 }
