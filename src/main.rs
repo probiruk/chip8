@@ -181,16 +181,11 @@ impl Chip8 {
                 0x8007 => {
                     let x = ((opcode & 0x0F00) >> 8) as usize;
                     let y = ((opcode & 0x00F0) >> 4) as usize;
-
                     let vx = self.cpu.registers[x];
                     let vy = self.cpu.registers[y];
-
-                    // According to CowGod's specification, This should be Vy > Vx.
-                    // But when Vy == Vx, no borrow occurs, most modern CHIP-8 emulators
-                    // set the VF to 1 because VF represents NOT borrow.
-                    self.cpu.registers[0x0F] = if vy >= vx { 1 } else { 0 };
-                    self.cpu.registers[x] =
-                        self.cpu.registers[y].wrapping_sub(self.cpu.registers[x])
+                    let (result, borrow) = vy.overflowing_sub(vx);
+                    self.cpu.registers[x] = result;
+                    self.cpu.registers[0xF] = if borrow { 0 } else { 1 };
                 }
                 // 8xyE - SHL Vx {, Vy}: Set Vx = Vx SHL 1
                 0x800E => {
@@ -509,5 +504,31 @@ fn main() {
             chip8.render_console();
             last_render = Instant::now();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run_rom(bytes: &[u8]) -> Chip8 {
+        let mut c = Chip8::default();
+        c.load_program(bytes);
+        for _ in 0..500_000 {
+            c.cycle().unwrap();
+        }
+        c
+    }
+
+    #[test]
+    fn corax() {
+        let c = run_rom(include_bytes!("../tests/corax+.ch8"));
+        insta::assert_debug_snapshot!(c.display.pixels);
+    }
+
+    #[test]
+    fn flags() {
+        let c = run_rom(include_bytes!("../tests/flags.ch8"));
+        insta::assert_debug_snapshot!(c.display.pixels);
     }
 }
