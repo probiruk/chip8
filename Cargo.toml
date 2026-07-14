@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 rand="0.10.2"
 insta = "1.48.0"
+winit = "0.30.13"
+pixels = "0.17.1"

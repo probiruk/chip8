@@ -1,4 +1,15 @@
-use std::time::Instant;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+use pixels::{Pixels, SurfaceTexture};
+use winit::{
+    application::ApplicationHandler,
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::{Window, WindowId},
+};
 
 const FONT_START: usize = 0x0;
 const FONTSET: [u8; 80] = [
@@ -20,6 +31,8 @@ const FONTSET: [u8; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
+const WIDTH: u32 = 64;
+const HEIGHT: u32 = 32;
 const MEMORY_SIZE: usize = 4096;
 
 #[derive(Debug, Default)]
@@ -350,10 +363,6 @@ impl Chip8 {
         }
         Ok(())
     }
-
-    pub fn render_console(&self) {
-        self.display.render_console();
-    }
 }
 
 #[derive(Debug)]
@@ -474,37 +483,108 @@ impl Display {
 
         collision
     }
+}
 
-    fn render_console(&self) {
-        for y in 0..Self::HEIGHT {
-            for x in 0..Self::WIDTH {
-                if self.get_pixel(x, y) {
-                    print!("██");
-                } else {
-                    print!("  ");
+const FRAME: Duration = Duration::from_micros(16_667);
+const CYCLES_PER_FRAME: usize = 10;
+
+struct App {
+    window: Option<Arc<Window>>,
+    pixels: Option<Pixels<'static>>,
+    chip8: Chip8,
+    last_tick: Instant,
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        event_loop.set_control_flow(ControlFlow::Poll);
+
+        let window = Arc::new(
+            event_loop
+                .create_window(Window::default_attributes().with_title("CHIP-8 Emulator"))
+                .unwrap(),
+        );
+
+        let size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(size.width, size.height, window.clone());
+        let pixels = Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap();
+
+        self.window = Some(window);
+        self.pixels = Some(pixels);
+        self.last_tick = Instant::now();
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        let (Some(_window), Some(pixels)) = (&self.window, &mut self.pixels) else {
+            return;
+        };
+
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => {
+                pixels.resize_surface(size.width, size.height).unwrap();
+            }
+            WindowEvent::RedrawRequested => {
+                let frame = pixels.frame_mut();
+                for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
+                    let x = (i % WIDTH as usize) as u8;
+                    let y = (i / WIDTH as usize) as u8;
+                    let v = if self.chip8.display.get_pixel(x, y) {
+                        0xFF
+                    } else {
+                        0x00
+                    };
+                    pixel.copy_from_slice(&[v, v, v, 0xFF]);
+                }
+
+                if let Err(e) = pixels.render() {
+                    eprintln!("render error: {e}");
+                    event_loop.exit();
                 }
             }
-            println!();
+            _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.last_tick.elapsed() < FRAME {
+            return;
+        }
+        self.last_tick = Instant::now();
+
+        for _ in 0..CYCLES_PER_FRAME {
+            if let Err(e) = self.chip8.cycle() {
+                eprintln!("emulation stopped: {e}");
+                event_loop.exit();
+                return;
+            }
+        }
+        self.chip8.timer.dt = self.chip8.timer.dt.saturating_sub(1);
+        self.chip8.timer.st = self.chip8.timer.st.saturating_sub(1);
+
+        if let Some(window) = &self.window {
+            window.request_redraw();
         }
     }
 }
 
 fn main() {
+    let rom = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "tests/ibm-logo.ch8".to_string());
+    let program = std::fs::read(&rom).unwrap_or_else(|e| panic!("failed to read {rom}: {e}"));
+
     let mut chip8 = Chip8::default();
-    let program = std::fs::read("tests/ibm-logo.ch8").unwrap();
-    chip8.load_program(program.as_slice());
+    chip8.load_program(&program);
 
-    let mut last_render = Instant::now();
-    loop {
-        if let Err(err) = chip8.cycle() {
-            panic!("Emulation stopped: {err}");
-        }
-
-        if last_render.elapsed().as_secs() >= 2 {
-            chip8.render_console();
-            last_render = Instant::now();
-        }
-    }
+    let event_loop = EventLoop::new().unwrap();
+    let mut app = App {
+        window: None,
+        pixels: None,
+        chip8,
+        last_tick: Instant::now(),
+    };
+    event_loop.run_app(&mut app).unwrap();
 }
 
 #[cfg(test)]
