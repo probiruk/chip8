@@ -8,6 +8,7 @@ use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
 
@@ -446,6 +447,13 @@ struct Keyboard {
 }
 
 impl Keyboard {
+    pub fn press_key(&mut self, key: usize, pressed: bool) {
+        if pressed && !self.keys[key] {
+            self.pressed_this_frame = Some(key as u8);
+        }
+        self.keys[key] = pressed;
+    }
+
     pub fn just_pressed(&mut self) -> Option<u8> {
         self.pressed_this_frame.take()
     }
@@ -542,6 +550,31 @@ impl ApplicationHandler for App {
                     event_loop.exit();
                 }
             }
+            WindowEvent::KeyboardInput { event, .. } => {
+                let PhysicalKey::Code(code) = event.physical_key else {
+                    return;
+                };
+                let hex = match code {
+                    KeyCode::Digit1 => 0x1,
+                    KeyCode::Digit2 => 0x2,
+                    KeyCode::Digit3 => 0x3,
+                    KeyCode::Digit4 => 0xC,
+                    KeyCode::KeyQ => 0x4,
+                    KeyCode::KeyW => 0x5,
+                    KeyCode::KeyE => 0x6,
+                    KeyCode::KeyR => 0xD,
+                    KeyCode::KeyA => 0x7,
+                    KeyCode::KeyS => 0x8,
+                    KeyCode::KeyD => 0x9,
+                    KeyCode::KeyF => 0xE,
+                    KeyCode::KeyZ => 0xA,
+                    KeyCode::KeyX => 0x0,
+                    KeyCode::KeyC => 0xB,
+                    KeyCode::KeyV => 0xF,
+                    _ => return,
+                };
+                self.chip8.keyboard.press_key(hex, event.state.is_pressed());
+            }
             _ => {}
         }
     }
@@ -571,7 +604,7 @@ impl ApplicationHandler for App {
 fn main() {
     let rom = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "tests/ibm-logo.ch8".to_string());
+        .unwrap_or_else(|| "tests/pong.ch8".to_string());
     let program = std::fs::read(&rom).unwrap_or_else(|e| panic!("failed to read {rom}: {e}"));
 
     let mut chip8 = Chip8::default();
