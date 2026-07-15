@@ -543,12 +543,12 @@ impl ApplicationHandler for App {
                 for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
                     let x = (i % WIDTH as usize) as u8;
                     let y = (i / WIDTH as usize) as u8;
-                    let v = if self.chip8.display.get_pixel(x, y) {
-                        0xFF
+                    let rgba = if self.chip8.display.get_pixel(x, y) {
+                        [0xFF, 0xB0, 0x00, 0xFF]
                     } else {
-                        0x00
+                        [0x1A, 0x1A, 0x1A, 0xFF]
                     };
-                    pixel.copy_from_slice(&[v, v, v, 0xFF]);
+                    pixel.copy_from_slice(&rgba);
                 }
 
                 if let Err(e) = pixels.render() {

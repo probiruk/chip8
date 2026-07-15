@@ -1,19 +1,11 @@
-<table width="100%">
-  <tr>
-    <td align="left" width="120">
-      <img src="assets/icon.svg" alt="CHIP-8 icon" width="100" />
-    </td>
-    <td align="right">
-      <h1>CHIP-8</h1>
-      <h3 style="margin-top: -10px;">A CHIP-8 emulator in Rust.</h3>
-    </td>
-  </tr>
-</table>
+# CHIP-8
+
+A CHIP-8 emulator in Rust.
 
 ![built with Rust](https://img.shields.io/badge/built_with-Rust-orange)
 
 <p align="center">
-  <img src="assets/screenshot.png" alt="pong" width="600" />
+  <img src="screenshot.png" alt="pong" width="600" />
 </p>
 
 ## Run
